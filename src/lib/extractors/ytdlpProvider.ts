@@ -1,16 +1,34 @@
 import { IExtractorProvider, AudioStream } from './interface';
 import { ExtractionError, RegionLockError } from '../errors';
-import { exec } from 'youtube-dl-exec';
+import { create } from 'youtube-dl-exec';
+import path from 'path';
+import fs from 'fs';
+
+function getBinaryPath(): string {
+  const isWin = process.platform === 'win32';
+  const binName = isWin ? 'yt-dlp.exe' : 'yt-dlp';
+  
+  // Try locating in node_modules relative to process.cwd() (dev environment)
+  const localPath = path.join(process.cwd(), 'node_modules', 'youtube-dl-exec', 'bin', binName);
+  if (fs.existsSync(localPath)) {
+    return localPath;
+  }
+  
+  // Fallback to system-wide binary
+  return 'yt-dlp';
+}
 
 export class YtDlpExtractor implements IExtractorProvider {
   async extractAudio(id: string): Promise<AudioStream> {
     const url = `https://www.youtube.com/watch?v=${id}`;
+    const binPath = getBinaryPath();
+    const execYtDlp = create(binPath);
 
     try {
       // Execute yt-dlp to get the best audio format
       // We pass `-f bestaudio[ext=m4a]/bestaudio` to prioritize m4a for native support
       // Then output to stdout `-o -`
-      const subprocess = exec(url, {
+      const subprocess = execYtDlp.exec(url, {
         format: 'bestaudio[ext=m4a]/bestaudio',
         output: '-',
         noCheckCertificates: true,

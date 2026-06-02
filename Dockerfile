@@ -1,8 +1,8 @@
 # Base image
 FROM node:20-alpine AS base
 
-# Install Python and FFmpeg for yt-dlp
-RUN apk add --no-cache python3 ffmpeg
+# Install Python, FFmpeg and yt-dlp
+RUN apk add --no-cache python3 ffmpeg yt-dlp
 
 # Dependencies stage
 FROM base AS deps
