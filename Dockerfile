@@ -8,6 +8,9 @@ RUN apk add --no-cache python3 ffmpeg yt-dlp
 FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
+# Skip youtube-dl-exec postinstall (it tries to download yt-dlp from GitHub which rate-limits)
+# We use the system-wide yt-dlp installed via apk instead.
+ENV YOUTUBE_DL_SKIP_DOWNLOAD=1
 RUN npm ci
 
 # Builder stage
