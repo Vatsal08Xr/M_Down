@@ -13,32 +13,36 @@ export async function GET(request: Request) {
   }
 
   try {
+    // extractAudio now writes to a temp file first, then returns a file read stream.
+    // This is reliable across all environments (no subprocess stdout pipe issues).
     const audioData = await extractorManager.extractAudio(id);
 
-    // Convert NodeJS Readable to Web ReadableStream
-    // yt-dlp exec returns a child process stdout which is a Socket (Readable)
-    const stream = audioData.stream as Readable;
-    
-    // We can construct a Web ReadableStream manually if node doesn't natively cast it in Next.js Response
+    const nodeStream = audioData.stream as Readable;
+
+    // Convert Node.js Readable to Web ReadableStream
     const webStream = new ReadableStream({
       start(controller) {
-        stream.on('data', (chunk) => controller.enqueue(chunk));
-        stream.on('end', () => controller.close());
-        stream.on('error', (err) => controller.error(err));
+        nodeStream.on('data', (chunk: Buffer) => controller.enqueue(chunk));
+        nodeStream.on('end', () => controller.close());
+        nodeStream.on('error', (err) => controller.error(err));
       },
       cancel() {
-        stream.destroy();
+        nodeStream.destroy();
       }
     });
 
-    // Sanitize title for filename
-    const sanitizedTitle = title.replace(/[^a-z0-9 -]/gi, '').trim();
+    // Sanitize title for filename (strip characters unsafe in filenames)
+    const sanitizedTitle = title.replace(/[^\w\s\-().]/g, '').trim() || 'song';
     const filename = `${sanitizedTitle}.${audioData.ext}`;
 
     const headers = new Headers();
     headers.set('Content-Type', audioData.mimeType);
     headers.set('Content-Disposition', `attachment; filename="${filename}"`);
-    
+    // Set Content-Length so the browser shows accurate download progress
+    if (audioData.size) {
+      headers.set('Content-Length', String(audioData.size));
+    }
+
     return new Response(webStream, { headers });
 
   } catch (error: any) {
