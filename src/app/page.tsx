@@ -37,22 +37,38 @@ export default function Home() {
     setDownloadingId(track.id);
     setError(null);
     try {
-      // Trigger download by creating an invisible anchor
       const url = `/api/download?id=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}`;
-      
-      // We can directly open the url in a new tab, or use an anchor tag
-      // Using an anchor tag with 'download' attribute helps enforce download
+      const res = await fetch(url);
+
+      if (!res.ok) {
+        // Server returned an error — parse and show it
+        let msg = `Download failed (${res.status})`;
+        try {
+          const data = await res.json();
+          if (data.error) msg = data.error;
+        } catch { /* ignore */ }
+        throw new Error(msg);
+      }
+
+      // Read the binary body and create an object URL
+      const blob = await res.blob();
+
+      // Extract filename from Content-Disposition if present, otherwise fall back
+      const disposition = res.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename="([^"]+)"/);
+      const filename = match ? match[1] : `${track.title}.m4a`;
+
+      const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
-      a.download = `${track.title}.m4a`; 
+      a.href = objectUrl;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-
-      // We simulate download state clearance since it's a direct browser download
-      setTimeout(() => setDownloadingId(null), 2000);
+      URL.revokeObjectURL(objectUrl);
     } catch (err: any) {
-      setError('Failed to initiate download');
+      setError(err.message || 'Download failed');
+    } finally {
       setDownloadingId(null);
     }
   };
